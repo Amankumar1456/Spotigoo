@@ -1,6 +1,6 @@
-# Field Notes / Spotigo
+# Spotigo 
 
-Spotigo is a hackathon civic-action layer for accessible issue reporting. Field Notes is the browser experience; Spotigo exposes civic-reporting intent to compatible MCP clients. A report is created only after explicit confirmation, and it is always a **Spotigo-local report**, not a government complaint.
+Spotigo is a hackathon civic-action layer for accessible issue reporting. Spotigo is the browser experience; Spotigo exposes civic-reporting intent to compatible MCP clients. A report is created only after explicit confirmation, and it is always a **Spotigo-local report**, not a government complaint.
 
 ## Current system
 
@@ -69,7 +69,7 @@ Tests cover the browser flow, action lifecycle, MCP semantics, authentication, o
 
 ## Browser tools and limitations
 
-The Field Notes page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is distinct from the persistent remote Spotigo API. Neither path contacts a government service.
+The Spotigo page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is distinct from the persistent remote Spotigo API. Neither path contacts a government service.
 
 Implemented: authentication, ownership, validation, request limits, state protection, idempotent local execution, capability discovery, and honest authority status.
 
