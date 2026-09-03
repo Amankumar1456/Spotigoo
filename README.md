@@ -2,7 +2,25 @@
 
 Spotigo is a hackathon civic-action layer for accessible issue reporting. Field Notes is the browser experience; Spotigo exposes civic-reporting intent to compatible MCP clients. A report is created only after explicit confirmation, and it is always a **Spotigo-local report**, not a government complaint.
 
-## Current system
+## Two separate agent interfaces
+
+This repository intentionally contains two different interfaces. They have different runtimes and are not interchangeable.
+
+### 1. Browser WebMCP — the hackathon submission
+
+The deployed Netlify site is a static browser application. When the page is open in a WebMCP-capable browser, it registers these **10 in-tab tools** through `document.modelContext`:
+
+`describe_issue_accessibly`, `report_civic_issue`, `acknowledge_safety_guidance`, `check_duplicate_reports`, `read_report_summary`, `confirm_submission`, `submit_report`, `undo_last_action`, `list_nearby_reports`, and `get_report_status`.
+
+These tools run entirely in the browser against the in-memory demonstration store in `js/reports.js`. In particular, browser `submit_report` does **not** call `POST /api/actions`, `POST /mcp`, or `server.js`. Its confirmation gate therefore works on the static Netlify deployment. The resulting `MR-*` reports are clearly demo/local records and reset on page reload.
+
+### 2. Server MCP — optional Phase 2 prototype
+
+`server.js` and `server/` implement a separate persistent, authenticated MCP/API service for externally connected agents. Its tools are `discover_spotigo_capabilities`, `report_civic_issue`, `prepare_civic_report`, `read_action_summary`, `confirm_action`, `execute_action`, and `track_action`.
+
+This Node HTTP server is **not run by a standard static Netlify deployment**. Until it is deployed as a serverless function or to a separate Node host, `/mcp` and `/api/*` are unavailable at the Netlify site URL. This does not break the browser WebMCP submission; it only means the optional remote-MCP prototype is not live.
+
+## Server prototype details
 
 - Accessible, voice- and photo-first browser experience with in-tab WebMCP tools.
 - Persistent local action store: `data/spotigo-actions.json`.
@@ -23,7 +41,7 @@ execute_action      -> SUBMITTED_TO_SPOTIGO
 
 The server controls transitions. Execution rejects unconfirmed actions. Repeated execution returns the existing result and does not create a duplicate report.
 
-## MCP tools
+## Optional server MCP tools
 
 All `POST /mcp` requests require `Authorization: Bearer <token>`.
 
@@ -52,7 +70,7 @@ Compatible agents can discover these semantic capabilities when connected to thi
 
 `data/spotigo-actions.json` is Git-ignored and can contain private report data. Writes are serialized and atomically renamed. Malformed saved data does not crash startup.
 
-## Run locally
+## Run the optional server locally
 
 ```powershell
 $env:SPOTIGO_MCP_AUTH_TOKEN = "replace-with-a-long-random-demo-secret"
@@ -67,9 +85,20 @@ npm test
 
 Tests cover the browser flow, action lifecycle, MCP semantics, authentication, ownership isolation, validation, and confirmation gate.
 
+## Deployment choices
+
+For the hackathon submission, deploy the static site to Netlify and demonstrate the Browser WebMCP tools. No server deployment is required for that flow.
+
+To demonstrate the optional Server MCP prototype, choose one of these paths:
+
+1. Deploy `server.js` to a Node-capable HTTPS host such as Render, Railway, or Fly.io, set `SPOTIGO_MCP_AUTH_TOKEN`, then point MCP clients to that service's `/mcp` URL. This is the smallest change because it preserves the existing Node server.
+2. Adapt the HTTP routes into Netlify Functions and configure redirects for `/mcp` and `/api/*`. This keeps one Netlify deployment but requires a serverless refactor and verification of persistence, which is not appropriate for the current JSON-file store.
+
+Do not claim that the optional server MCP endpoint is live on Netlify unless one of those deployment paths has been completed.
+
 ## Browser tools and limitations
 
-The Field Notes page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is distinct from the persistent remote Spotigo API. Neither path contacts a government service.
+The Field Notes page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is intentionally distinct from the persistent remote Spotigo API. Neither path contacts a government service.
 
 Implemented: authentication, ownership, validation, request limits, state protection, idempotent local execution, capability discovery, and honest authority status.
 
