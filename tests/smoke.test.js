@@ -82,7 +82,7 @@ test("manual form flow: describe -> confirm gate blocks submit -> check -> read 
 
   doc.getElementById("submit-btn").click();
   await new Promise((r) => setTimeout(r, 20));
-  assert.match(doc.getElementById("form-status").textContent, /Filed as report MR-/);
+  assert.match(doc.getElementById("form-status").textContent, /Created Spotigo report MR-/);
   assert.match(doc.getElementById("draft-review").textContent, /Submitted/);
 
   restore();
@@ -94,6 +94,7 @@ test("tool tester panel renders all registered tools as options", async () => {
   const options = [...doc.querySelectorAll("#tool-select option")].map((o) => o.value);
   assert.ok(options.includes("submit_report"));
   assert.ok(options.includes("describe_issue_accessibly"));
-  assert.ok(options.length === 9);
+  assert.ok(options.includes("report_civic_issue"));
+  assert.ok(options.length === 10);
   restore();
 });

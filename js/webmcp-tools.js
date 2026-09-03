@@ -28,6 +28,7 @@ import {
   undoLastAction,
   peekLastAction,
 } from "./state.js";
+import { getCapability } from "./capabilities.js";
 
 const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
 
@@ -64,6 +65,47 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
   };
 
   const tools = [
+    {
+      name: "report_civic_issue",
+      description:
+        "Prepare a civic issue report when a user wants to report a pothole, road damage, broken streetlight, blocked sidewalk, illegal dumping, flooding, fallen tree, traffic signal problem, graffiti, or another public issue. This creates only a draft in Spotigo; it never contacts a government authority and still requires human confirmation before submission.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          issue_type: { type: "string", enum: CATEGORY_IDS },
+          description: { type: "string" },
+          location: { type: "string" },
+          lat: { type: "number" },
+          lng: { type: "number" },
+          photo_filename: { type: "string" },
+          photo_size_bytes: { type: "number" },
+        },
+        required: ["issue_type", "description"],
+      },
+      execute: async (input) => {
+        const lat = typeof input.lat === "number" ? input.lat : 37.7749 + (Math.random() - 0.5) * 0.01;
+        const lng = typeof input.lng === "number" ? input.lng : -122.4194 + (Math.random() - 0.5) * 0.01;
+        const draft = createDraft({
+          category: input.issue_type,
+          description: input.description,
+          lat,
+          lng,
+          locationText: input.location,
+          photoNote: input.photo_filename ? { fileName: input.photo_filename, sizeBytes: input.photo_size_bytes } : null,
+        });
+        const output = {
+          capability: getCapability("report_civic_issue"),
+          draft_id: draft.id,
+          action_state: "READY_FOR_CONFIRMATION",
+          authority_status: "UNKNOWN",
+          external_submission: "NOT_ATTEMPTED",
+          summary: `Spotigo draft created. ${draftSummaryText(draft)} No government authority has been contacted. Check duplicates, read the summary, and obtain explicit human confirmation before creating a Spotigo report.`,
+        };
+        notify("report_civic_issue", input, output);
+        return output;
+      },
+    },
+
     {
       name: "describe_issue_accessibly",
       description:
@@ -242,7 +284,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           confirmed: true,
           summary: draft.risk.level === "critical"
             ? "Final confirmation recorded. This safety-critical report can now be filed and cannot be undone."
-            : "Confirmed. You can now call submit_report to file this issue with the city.",
+            : "Confirmed. You can now call submit_report to create this report in Spotigo. No government authority will be contacted.",
         };
         notify("confirm_submission", input, output);
         return output;
@@ -269,8 +311,8 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           status: record.status,
           reported_at: record.reportedAt,
           summary: draft.risk.level === "critical"
-            ? `Filed as safety-critical report ${record.id}. The city has been notified. This report cannot be undone.`
-            : `Filed as report ${record.id}. The city has been notified. You can undo this within the session via undo_last_action if it was a mistake.`,
+            ? `Created safety-critical Spotigo report ${record.id}. No government authority has been contacted. This report cannot be undone.`
+            : `Created Spotigo report ${record.id}. No government authority has been contacted. You can undo this within the session via undo_last_action if it was a mistake.`,
         };
         notify("submit_report", input, output);
         return output;

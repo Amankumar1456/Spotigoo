@@ -17,10 +17,11 @@ function getTool(tools, name) {
   return t;
 }
 
-test("all nine tools are defined with name, description, inputSchema, execute", () => {
+test("all ten tools are defined with name, description, inputSchema, execute", () => {
   const tools = buildFieldNotesTools();
   const expected = [
     "describe_issue_accessibly",
+    "report_civic_issue",
     "acknowledge_safety_guidance",
     "check_duplicate_reports",
     "read_report_summary",
@@ -38,6 +39,18 @@ test("all nine tools are defined with name, description, inputSchema, execute", 
     assert.equal(typeof t.execute, "function");
     assert.equal(t.inputSchema.type, "object");
   }
+});
+
+test("report_civic_issue is intent-level, creates only a local draft, and keeps confirmation required", async () => {
+  const tools = buildFieldNotesTools();
+  const out = await getTool(tools, "report_civic_issue").execute({
+    issue_type: "pothole",
+    description: "Pothole beside the bus stop",
+    location: "5th and Main",
+  });
+  assert.match(out.draft_id, /^draft-/);
+  assert.equal(out.action_state, "READY_FOR_CONFIRMATION");
+  assert.equal(out.external_submission, "NOT_ATTEMPTED");
 });
 
 test("photo metadata is retained in the readable draft summary without claiming image analysis", async () => {

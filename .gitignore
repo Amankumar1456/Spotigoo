@@ -3,3 +3,7 @@ node_modules/
 Thumbs.db
 *.log
 .vscode/
+data/spotigo-actions.json
+.env
+.env.*
+!.env.example
