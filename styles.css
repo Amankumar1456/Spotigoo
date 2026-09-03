@@ -1,0 +1,197 @@
+/* styles.css — accessible-first design.
+   Field Notes' whole premise is usability for people who struggle with
+   standard municipal forms, so contrast, target size, and focus visibility
+   are treated as requirements, not polish. */
+
+:root {
+  --ink: #14181f;
+  --ink-soft: #4a5468;
+  --paper: #fbfaf7;
+  --panel: #ffffff;
+  --line: #dfe2e8;
+  --brand: #1d5c3a;
+  --brand-dark: #123f27;
+  --brand-tint: #e6f0e9;
+  --amber: #9a5b00;
+  --amber-tint: #fdf1de;
+  --error: #a3231f;
+  --error-tint: #fbe9e8;
+  --radius: 12px;
+  --focus: 3px solid #1d5c3a;
+  font-size: 17px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Iowan Old Style", "Georgia", "Charter", serif, system-ui;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--brand);
+  color: white;
+  padding: 10px 16px;
+  z-index: 100;
+}
+.skip-link:focus { left: 10px; top: 10px; }
+
+.site-header {
+  background: var(--brand-dark);
+  color: white;
+  padding: 28px 0 22px;
+}
+.site-header h1 { margin: 0 0 6px; font-size: 1.9rem; }
+.tagline { margin: 0 0 14px; max-width: 62ch; color: #dce9e0; font-size: 1.02rem; }
+
+.badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-family: system-ui, sans-serif;
+  margin: 0;
+}
+.badge--ok { background: #d5f0dd; color: var(--brand-dark); }
+.badge--info { background: #ffe9c2; color: #5c3d00; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  padding: 26px 20px 60px;
+}
+.panel--wide { grid-column: 1 / -1; }
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 22px 24px;
+}
+.panel h2 { margin-top: 0; font-size: 1.25rem; }
+.muted { color: var(--ink-soft); font-size: 0.94rem; }
+
+label {
+  display: block;
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin: 16px 0 6px;
+  color: var(--ink);
+}
+label:first-child { margin-top: 0; }
+
+select, textarea, input[type="text"] {
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+}
+select:focus, textarea:focus, input:focus { outline: var(--focus); outline-offset: 1px; }
+
+.input-row { display: flex; gap: 8px; align-items: flex-start; }
+.input-row textarea { flex: 1; }
+
+.btn {
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 46px;
+}
+.btn:hover { border-color: var(--brand); }
+.btn:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.btn--primary { background: var(--brand); border-color: var(--brand); color: white; }
+.btn--primary:hover { background: var(--brand-dark); }
+.btn--ghost { background: transparent; }
+.btn--icon { min-width: 46px; font-size: 1.2rem; padding: 8px; }
+
+.form-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+.confirm-row {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--amber-tint);
+  border: 1.5px solid #f0d8a8;
+  border-radius: 10px;
+}
+.confirm-row label { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 700; }
+.confirm-row input[type="checkbox"] { width: 20px; height: 20px; }
+
+.status { min-height: 1.4em; margin-top: 14px; font-family: system-ui, sans-serif; font-size: 0.94rem; }
+.status--ok { color: var(--brand-dark); }
+.status--error { color: var(--error); font-weight: 600; }
+
+.draft-review { font-size: 1rem; }
+.draft-status { font-family: system-ui, sans-serif; font-weight: 700; padding: 8px 12px; border-radius: 8px; display: inline-block; }
+.draft-status--pending { background: var(--amber-tint); color: var(--amber); }
+.draft-status--confirmed { background: var(--brand-tint); color: var(--brand-dark); }
+
+.activity-log, .reports-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.log-entry {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--paper);
+}
+.log-entry__head { display: flex; justify-content: space-between; align-items: baseline; font-family: system-ui, sans-serif; }
+.log-entry__head code { background: var(--brand-tint); color: var(--brand-dark); padding: 2px 7px; border-radius: 6px; font-size: 0.85rem; }
+.log-entry__summary { margin: 6px 0 0; }
+
+.reports-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.report-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--paper);
+}
+.report-card__head { display: flex; justify-content: space-between; align-items: center; font-family: system-ui, sans-serif; }
+.report-card__id { font-weight: 700; color: var(--ink-soft); font-size: 0.85rem; }
+.report-card__category { font-weight: 700; margin: 8px 0 4px; }
+.report-card__desc { margin: 0 0 6px; }
+.report-card__meta { margin: 0; }
+
+.pill { font-family: system-ui, sans-serif; font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: capitalize; }
+.pill--submitted { background: var(--amber-tint); color: var(--amber); }
+.pill--acknowledged { background: #e4e9fb; color: #33409c; }
+.pill--in_progress { background: #fdeccb; color: #8a5300; }
+.pill--resolved { background: var(--brand-tint); color: var(--brand-dark); }
+
+.tool-tester { font-family: system-ui, sans-serif; }
+.tool-tester select, .tool-tester textarea { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.9rem; }
+.tool-desc { margin: 6px 0 0; }
+.tool-result { margin-top: 12px; }
+.tool-result pre {
+  background: #0f1720;
+  color: #d7ffe6;
+  padding: 14px;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+.tool-result__error { color: var(--error); font-weight: 700; background: var(--error-tint); padding: 10px 12px; border-radius: 8px; }
+
+.site-footer { padding: 24px 0 40px; color: var(--ink-soft); font-family: system-ui, sans-serif; font-size: 0.88rem; }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
