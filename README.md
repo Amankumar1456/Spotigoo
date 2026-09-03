@@ -101,6 +101,18 @@ To demonstrate the optional Server MCP prototype, choose one of these paths:
 
 Do not claim that the optional server MCP endpoint is live on Netlify unless one of those deployment paths has been completed.
 
+## Hackathon polish pass (targeted, additive)
+
+A follow-up pass strengthened the existing Browser WebMCP flow without changing its architecture:
+
+- `check_duplicate_reports` now returns a three-way `duplicate_assessment` — `NO_NEARBY_REPORTS`, `POSSIBLE_DUPLICATE`, or `EXISTING_MATCHING_REPORT` (within 25m of an existing report) — instead of a binary yes/no, so an agent can reason about how confident the match is.
+- Every gate/validation error thrown by the browser tools and `js/state.js` now carries a machine-readable `error.code` (e.g. `DRAFT_NOT_CONFIRMED`, `DRAFT_NOT_REVIEWED`, `SAFETY_ACKNOWLEDGEMENT_REQUIRED`, `REPORT_NOT_FOUND`) in addition to its existing human-readable message, so an agent can branch on the failure reason instead of parsing text.
+- Fixed a check-ordering bug in `confirmDraft()` where confirming a safety-critical, unreviewed draft returned the generic "not reviewed" message instead of the safety-critical one it should lead with.
+- Fixed test-isolation leakage between tests in `tests/tools.test.js` (drafts/action history are module-level singletons by design; tests now reset that state before each run instead of depending on execution order).
+- Added `tests/acceptance.test.js`, which runs the full judge-facing scenario — draft → duplicate check → review → confirmation gate (including both negative cases) → submission → tracking ID → status lookup of that same record → activity timeline — as one executable test against the real tool closures, plus a dedicated test for the new three-way duplicate assessment and a test that submission output never implies a real government authority was contacted.
+
+No tool names, schemas, statuses, or existing behavior were removed or renamed; `duplicate_assessment` and `error.code` are additive fields.
+
 ## Browser tools and limitations
 
 The Spotigo page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is intentionally distinct from the persistent remote Spotigo API, and neither path contacts a government service.

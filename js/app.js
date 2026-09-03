@@ -18,7 +18,7 @@ let currentDraftId = null;
 function onToolCall(entry) {
   activityLog.push(entry);
   renderActivityLog(document.getElementById("activity-log"), activityLog);
-  if (entry.name === "describe_issue_accessibly" && entry.output?.draft_id) {
+  if ((entry.name === "describe_issue_accessibly" || entry.name === "report_civic_issue") && entry.output?.draft_id) {
     currentDraftId = entry.output.draft_id;
   }
   refreshDraftPanel();
@@ -67,6 +67,7 @@ function initHumanForm(tools) {
   const safetyAcknowledgement = document.getElementById("safety-acknowledgement");
   const confirmLabel = document.getElementById("confirm-label");
   const submitBtn = document.getElementById("submit-btn");
+  const statusBtn = document.getElementById("status-btn");
   const undoBtn = document.getElementById("undo-btn");
 
   voiceBtn.hidden = !isVoiceInputSupported();
@@ -114,6 +115,7 @@ function initHumanForm(tools) {
       currentDraftId = output.draft_id;
       refreshDraftPanel();
       setStatusMessage("Draft created. Now check for duplicates, then review before confirming.");
+      statusBtn.disabled = true;
       confirmCheckbox.checked = false;
       confirmCheckbox.disabled = true;
       safetyCheckbox.checked = false;
@@ -189,6 +191,22 @@ function initHumanForm(tools) {
     try {
       const tool = findTool(tools, "submit_report");
       const output = await tool.execute({ draft_id: currentDraftId });
+      setStatusMessage(output.summary);
+      refreshDraftPanel();
+      refreshReportsList();
+      statusBtn.disabled = false;
+    } catch (err) {
+      setStatusMessage(err.message, true);
+    }
+  });
+
+  statusBtn.addEventListener("click", async () => {
+    if (!currentDraftId) return setStatusMessage("Create and submit a report first.", true);
+    try {
+      const { getDraft } = await import("./state.js");
+      const draft = getDraft(currentDraftId);
+      if (!draft?.reportId) return setStatusMessage("Submit this report before checking its status.", true);
+      const output = await findTool(tools, "get_report_status").execute({ report_id: draft.reportId });
       setStatusMessage(output.summary);
       refreshDraftPanel();
       refreshReportsList();

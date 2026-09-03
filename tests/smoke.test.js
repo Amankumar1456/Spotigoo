@@ -84,6 +84,11 @@ test("manual form flow: describe -> confirm gate blocks submit -> check -> read 
   await new Promise((r) => setTimeout(r, 20));
   assert.match(doc.getElementById("form-status").textContent, /Created Spotigo report MR-/);
   assert.match(doc.getElementById("draft-review").textContent, /Submitted/);
+  assert.equal(doc.getElementById("status-btn").disabled, false);
+
+  doc.getElementById("status-btn").click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(doc.getElementById("form-status").textContent, /Tracking ID MR-/);
 
   restore();
 });

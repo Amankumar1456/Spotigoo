@@ -20,6 +20,31 @@ const state = {
   listeners: new Set(),
 };
 
+/**
+ * Structured error helper. Every gate below throws one of these instead of a
+ * bare Error, so a WebMCP-calling agent (or a test) can branch on `error.code`
+ * instead of parsing the human-readable message string. The message text is
+ * unchanged from before this was added, so existing message-based assertions
+ * still hold — `code` is additive.
+ */
+function gateError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+/**
+ * Test-only helper: clears all in-memory draft/action state so each test can
+ * run against a clean session, matching what most tests already assume in
+ * their own descriptions (e.g. "on a clean session"). Not imported or called
+ * from any production code path (app.js, webmcp-tools.js never import this).
+ */
+export function resetStateForTests() {
+  state.drafts.clear();
+  state.actionStack.length = 0;
+  draftSeq = 1;
+}
+
 export function subscribe(fn) {
   state.listeners.add(fn);
   return () => state.listeners.delete(fn);
@@ -42,6 +67,8 @@ export function createDraft({ category, description, lat, lng, locationText, pho
     photoSizeBytes: Number.isFinite(photoNote?.sizeBytes) ? photoNote.sizeBytes : null,
     risk: classifyRisk(description),
     safetyAcknowledged: false,
+    reviewedAt: null,
+    lastDuplicateCheck: null,
     confirmed: false,
     submitted: false,
     reportId: null,
@@ -62,21 +89,41 @@ export function listDrafts() {
 
 export function confirmDraft(draftId) {
   const draft = state.drafts.get(draftId);
-  if (!draft) throw new Error(`No draft found with id ${draftId}`);
-  if (draft.submitted) throw new Error(`Draft ${draftId} was already submitted and cannot be re-confirmed`);
+  if (!draft) throw gateError("DRAFT_NOT_FOUND", `No draft found with id ${draftId}`);
+  if (draft.submitted) throw gateError("DRAFT_ALREADY_SUBMITTED", `Draft ${draftId} was already submitted and cannot be re-confirmed`);
+  // Safety-critical acknowledgement is checked before the general review gate
+  // so an agent confirming a hazardous draft is told about the safety
+  // requirement first, not a generic "please review" message.
   if (draft.risk.level === "critical" && !draft.safetyAcknowledged) {
-    throw new Error(`Draft ${draftId} is safety-critical. Acknowledge the safety guidance before confirming.`);
+    throw gateError("SAFETY_ACKNOWLEDGEMENT_REQUIRED", `Draft ${draftId} is safety-critical. Acknowledge the safety guidance before confirming.`);
   }
+  if (!draft.reviewedAt) throw gateError("DRAFT_NOT_REVIEWED", `Draft ${draftId} has not been reviewed. Call read_report_summary before confirming.`);
   draft.confirmed = true;
   emit({ type: "draft_confirmed", draft });
   return draft;
 }
 
+export function markDraftReviewed(draftId) {
+  const draft = state.drafts.get(draftId);
+  if (!draft) throw gateError("DRAFT_NOT_FOUND", `No draft found with id ${draftId}`);
+  draft.reviewedAt = new Date().toISOString();
+  emit({ type: "draft_reviewed", draft });
+  return draft;
+}
+
+export function recordDuplicateCheck(draftId, result) {
+  const draft = state.drafts.get(draftId);
+  if (!draft) throw gateError("DRAFT_NOT_FOUND", `No draft found with id ${draftId}`);
+  draft.lastDuplicateCheck = { ...result, checkedAt: new Date().toISOString() };
+  emit({ type: "duplicate_check_completed", draft });
+  return draft;
+}
+
 export function acknowledgeSafetyGuidance(draftId) {
   const draft = state.drafts.get(draftId);
-  if (!draft) throw new Error(`No draft found with id ${draftId}`);
-  if (draft.risk.level !== "critical") throw new Error(`Draft ${draftId} does not require safety acknowledgement.`);
-  if (draft.submitted) throw new Error(`Draft ${draftId} was already submitted.`);
+  if (!draft) throw gateError("DRAFT_NOT_FOUND", `No draft found with id ${draftId}`);
+  if (draft.risk.level !== "critical") throw gateError("SAFETY_ACKNOWLEDGEMENT_NOT_APPLICABLE", `Draft ${draftId} does not require safety acknowledgement.`);
+  if (draft.submitted) throw gateError("DRAFT_ALREADY_SUBMITTED", `Draft ${draftId} was already submitted.`);
   draft.safetyAcknowledged = true;
   emit({ type: "safety_acknowledged", draft });
   return draft;
@@ -88,13 +135,19 @@ export function acknowledgeSafetyGuidance(draftId) {
  */
 export function submitDraft(draftId) {
   const draft = state.drafts.get(draftId);
-  if (!draft) throw new Error(`No draft found with id ${draftId}`);
-  if (draft.submitted) throw new Error(`Draft ${draftId} was already submitted`);
+  if (!draft) throw gateError("DRAFT_NOT_FOUND", `No draft found with id ${draftId}`);
+  if (draft.submitted) throw gateError("DRAFT_ALREADY_SUBMITTED", `Draft ${draftId} was already submitted`);
+  // This is the core safety gate (see CORE SAFETY REQUIREMENT): a draft must
+  // be both reviewed AND explicitly confirmed before it can become a report.
+  // Both checks run every time, regardless of caller — there is no path that
+  // creates a report without passing through both of them.
   if (!draft.confirmed) {
-    throw new Error(
+    throw gateError(
+      "DRAFT_NOT_CONFIRMED",
       `Draft ${draftId} has not been confirmed by the human yet. Call read_report_summary and get explicit confirm_submission before submit_report.`
     );
   }
+  if (!draft.reviewedAt) throw gateError("DRAFT_NOT_REVIEWED", `Draft ${draftId} has not been reviewed. Call read_report_summary before submit_report.`);
 
   const record = addReport(draft);
   draft.submitted = true;

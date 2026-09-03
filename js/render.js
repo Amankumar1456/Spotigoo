@@ -2,7 +2,7 @@
 // Small, dependency-free DOM rendering helpers. No framework — keeps the app
 // zero-build and easy for judges to read start to finish.
 
-import { categoryLabel } from "./reports.js";
+import { categoryLabel, DEMO_AUTHORITY, DEMO_MODE } from "./reports.js";
 
 export function renderReportsList(el, reports) {
   if (!reports.length) {
@@ -35,10 +35,12 @@ export function renderDraftReview(el, draft) {
       <p><strong>${categoryLabel(draft.category)}</strong></p>
       <p>${escapeHtml(draft.description)}</p>
       <p class="muted">${draft.locationText ? escapeHtml(draft.locationText) : `${draft.lat?.toFixed(4)}, ${draft.lng?.toFixed(4)}`}</p>
+      <p class="muted"><strong>Authority:</strong> ${DEMO_AUTHORITY}<br /><strong>Mode:</strong> ${DEMO_MODE}</p>
+      ${draft.lastDuplicateCheck ? `<p class="muted"><strong>Nearby check:</strong> ${duplicateCheckLabel(draft.lastDuplicateCheck)}</p>` : ""}
       ${draft.photoFileName ? `<p class="draft-photo-meta">Photo attached · ${escapeHtml(draft.photoFileName)} · ${formatFileSize(draft.photoSizeBytes)}</p>` : ""}
       ${draft.risk.level === "critical" ? `<div class="risk-alert" role="alert"><strong>Safety-critical report</strong><p>${escapeHtml(draft.risk.safetyMessage)}</p><p>${draft.safetyAcknowledged ? "Safety guidance acknowledged. Final confirmation is still required." : "Safety acknowledgement and final confirmation are both required."}</p></div>` : ""}
       <p class="draft-status ${draft.confirmed ? "draft-status--confirmed" : "draft-status--pending"}">
-        ${draft.submitted ? "✅ Submitted" : draft.confirmed ? "☑️ Confirmed — ready to submit" : "⏳ Awaiting your confirmation"}
+        ${draft.submitted ? `✅ Submitted · Tracking ID: ${draft.reportId} · Status: submitted` : draft.confirmed ? "☑️ Confirmed — ready to submit" : draft.reviewedAt ? "👀 Reviewed — human confirmation required" : "⏳ Review and human confirmation required"}
       </p>
     </div>
   `;
@@ -81,6 +83,12 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function duplicateCheckLabel(check) {
+  if (check.assessment === "NO_NEARBY_REPORTS") return "No nearby reports found";
+  if (check.assessment === "EXISTING_MATCHING_REPORT") return `Existing matching report nearby — this may be the same issue (${check.count} nearby)`;
+  return `Possible duplicate (${check.count} nearby)`;
 }
 
 function formatFileSize(bytes) {

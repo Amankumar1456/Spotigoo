@@ -18,12 +18,16 @@ import {
   getReportById,
   listAllReports,
   STATUS_TRANSITION_MS,
+  DEMO_AUTHORITY,
+  DEMO_MODE,
 } from "./reports.js";
 import {
   createDraft,
   getDraft,
   confirmDraft,
   acknowledgeSafetyGuidance,
+  markDraftReviewed,
+  recordDuplicateCheck,
   submitDraft,
   undoLastAction,
   peekLastAction,
@@ -78,10 +82,17 @@ function formatFileSize(bytes) {
 function requireDraft(draftId) {
   const draft = getDraft(draftId);
   if (!draft) {
-    throw new Error(`No draft found with id "${draftId}". Call describe_issue_accessibly first.`);
+    const err = new Error(`No draft found with id "${draftId}". Call describe_issue_accessibly first.`);
+    err.code = "DRAFT_NOT_FOUND";
+    throw err;
   }
   return draft;
 }
+
+// Tight radius (meters) within which a nearby report is treated as an
+// existing match for the same physical issue rather than merely "possible".
+// Kept well inside the default 250m check radius.
+const EXISTING_MATCH_RADIUS_METERS = 25;
 
 /**
  * Builds the tool definition array (name, description, inputSchema, execute).
@@ -128,6 +139,8 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           draft_id: draft.id,
           action_state: "READY_FOR_CONFIRMATION",
           authority_status: "UNKNOWN",
+          authority: DEMO_AUTHORITY,
+          mode: DEMO_MODE,
           external_submission: "NOT_ATTEMPTED",
           location_source: coordinates.source,
           summary: `Spotigo draft created. ${draftSummaryText(draft)} No government authority has been contacted. Check duplicates, read the summary, and obtain explicit human confirmation before creating a Spotigo report.`,
@@ -184,6 +197,8 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           lng: draft.lng,
           location_source: coordinates.source,
           risk_level: draft.risk.level,
+          authority: DEMO_AUTHORITY,
+          mode: DEMO_MODE,
           requires_safety_acknowledgement: draft.risk.level === "critical",
           summary: `Draft created. ${draftSummaryText(draft)} Next, call check_duplicate_reports to see if this has already been reported.`,
         };
@@ -202,7 +217,11 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         required: ["draft_id", "acknowledge"],
       },
       execute: async (input) => {
-        if (input.acknowledge !== true) throw new Error("acknowledge must be explicitly true.");
+        if (input.acknowledge !== true) {
+          const err = new Error("acknowledge must be explicitly true.");
+          err.code = "SAFETY_ACK_MUST_BE_TRUE";
+          throw err;
+        }
         const draft = acknowledgeSafetyGuidance(input.draft_id);
         const output = {
           draft_id: draft.id,
@@ -217,7 +236,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
     {
       name: "check_duplicate_reports",
       description:
-        "Check whether an issue near a given location and category has already been reported recently, to avoid filing a duplicate. Pass a draft_id to reuse its location/category, or pass lat/lng/category directly.",
+        `Check whether an issue near a given location and category has already been reported recently, to avoid filing a duplicate. Pass a draft_id to reuse its location/category, or pass lat/lng/category directly. Returns duplicate_assessment as one of three structured values an agent can reason about: "NO_NEARBY_REPORTS" (nothing found — safe to proceed), "EXISTING_MATCHING_REPORT" (a report within ${EXISTING_MATCH_RADIUS_METERS}m already covers this, likely the same physical issue), or "POSSIBLE_DUPLICATE" (something nearby but not close enough to be certain). This tool never blocks filing on its own — it only informs the human/agent.`,
       inputSchema: {
         type: "object",
         properties: {
@@ -247,8 +266,20 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           category,
           radiusMeters: input.radius_meters || 250,
         });
+        // Three structured buckets, not two: a report essentially on top of
+        // this location/category is a much stronger signal than "something
+        // nearby exists," and an agent (or the UI) can react differently to
+        // each — e.g. surface the existing tracking ID instead of just a warning.
+        const duplicateAssessment =
+          matches.length === 0
+            ? "NO_NEARBY_REPORTS"
+            : matches[0].distanceMeters <= EXISTING_MATCH_RADIUS_METERS
+              ? "EXISTING_MATCHING_REPORT"
+              : "POSSIBLE_DUPLICATE";
+        if (input.draft_id) recordDuplicateCheck(input.draft_id, { assessment: duplicateAssessment, count: matches.length });
         const output = {
           duplicate_count: matches.length,
+          duplicate_assessment: duplicateAssessment,
           matches: matches.map((m) => ({
             report_id: m.id,
             category_label: categoryLabel(m.category),
@@ -258,9 +289,11 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
             reported_at: m.reportedAt,
           })),
           summary:
-            matches.length === 0
-              ? "No similar reports found nearby in the last 30 days. This looks like a new issue."
-              : `Found ${matches.length} similar report${matches.length > 1 ? "s" : ""} nearby, closest ${matches[0].distanceMeters} meters away, currently "${matches[0].status}". Consider telling the user before filing a new one.`,
+            duplicateAssessment === "NO_NEARBY_REPORTS"
+              ? "No nearby reports found in the last 30 days. This looks like a new issue."
+              : duplicateAssessment === "EXISTING_MATCHING_REPORT"
+                ? `Existing matching report found: ${matches[0].id} is only ${matches[0].distanceMeters} meters away and currently "${matches[0].status}". This is very likely the same issue — consider pointing the user to ${matches[0].id} instead of filing a new one.`
+                : `Possible duplicate: found ${matches.length} similar report${matches.length > 1 ? "s" : ""} nearby, closest ${matches[0].distanceMeters} meters away, currently "${matches[0].status}". Tell the user before filing a new one.`,
         };
         notify("check_duplicate_reports", input, output);
         return output;
@@ -279,13 +312,16 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         required: ["draft_id"],
       },
       execute: async (input) => {
-        const draft = requireDraft(input.draft_id);
+        const draft = markDraftReviewed(input.draft_id);
         const output = {
           draft_id: draft.id,
           confirmed: draft.confirmed,
           submitted: draft.submitted,
           risk_level: draft.risk.level,
           requires_safety_acknowledgement: draft.risk.level === "critical",
+          reviewed: true,
+          authority: DEMO_AUTHORITY,
+          mode: DEMO_MODE,
           summary: draftSummaryText(draft),
         };
         notify("read_report_summary", input, output);
@@ -307,12 +343,17 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
       },
       execute: async (input) => {
         if (input.confirm !== true) {
-          throw new Error("confirm must be explicitly true. The human has not agreed to submit yet.");
+          const err = new Error("confirm must be explicitly true. The human has not agreed to submit yet.");
+          err.code = "CONFIRMATION_MUST_BE_TRUE";
+          throw err;
         }
         const draft = confirmDraft(input.draft_id);
         const output = {
           draft_id: draft.id,
           confirmed: true,
+          reviewed: Boolean(draft.reviewedAt),
+          authority: DEMO_AUTHORITY,
+          mode: DEMO_MODE,
           summary: draft.risk.level === "critical"
             ? "Final confirmation recorded. This safety-critical report can now be filed and cannot be undone."
             : "Confirmed. You can now call submit_report to create this report in Spotigo. No government authority will be contacted.",
@@ -338,9 +379,12 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         const record = submitDraft(input.draft_id);
         const output = {
           report_id: record.id,
+          tracking_id: record.id,
           category_label: categoryLabel(record.category),
           status: record.status,
           reported_at: record.reportedAt,
+          authority: record.authority,
+          mode: record.mode,
           summary: draft.risk.level === "critical"
             ? `Created safety-critical Spotigo report ${record.id}. No government authority has been contacted. This report cannot be undone.`
             : `Created Spotigo report ${record.id}. No government authority has been contacted. You can undo this within the session via undo_last_action if it was a mistake.`,
@@ -426,13 +470,20 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
       },
       execute: async (input) => {
         const record = getReportById(input.report_id);
-        if (!record) throw new Error(`No report found with id ${input.report_id}.`);
+        if (!record) {
+          const err = new Error(`No report found with id ${input.report_id}.`);
+          err.code = "REPORT_NOT_FOUND";
+          throw err;
+        }
         const output = {
           report_id: record.id,
+          tracking_id: record.id,
           category_label: categoryLabel(record.category),
           status: record.status,
           reported_at: record.reportedAt,
-        summary: `Report ${record.id} is currently "${record.status}". Newly filed mock reports advance every ${STATUS_TRANSITION_MS / 1000} seconds when checked.`,
+          authority: record.authority || DEMO_AUTHORITY,
+          mode: record.mode || DEMO_MODE,
+          summary: `Tracking ID ${record.id}: status is "${record.status}". Authority: ${record.authority || DEMO_AUTHORITY}. Mode: ${record.mode || DEMO_MODE}. Newly filed mock reports advance every ${STATUS_TRANSITION_MS / 1000} seconds when checked.`,
         };
         notify("get_report_status", input, output);
         return output;

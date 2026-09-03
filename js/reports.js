@@ -24,6 +24,8 @@ export const STATUS = {
 };
 
 export const STATUS_TRANSITION_MS = 12000;
+export const DEMO_AUTHORITY = "Spotigo Demo Authority";
+export const DEMO_MODE = "Simulated civic backend";
 const STATUS_FLOW = [STATUS.SUBMITTED, STATUS.ACKNOWLEDGED, STATUS.IN_PROGRESS, STATUS.RESOLVED];
 
 // Seeded "existing" reports already on the books, used to demonstrate duplicate
@@ -130,6 +132,8 @@ export function addReport(draft) {
     reportedAt: new Date().toISOString(),
     statusUpdatedAt: new Date().toISOString(),
     source: "agent-assisted",
+    authority: DEMO_AUTHORITY,
+    mode: DEMO_MODE,
   };
   reports.unshift(record);
   return record;

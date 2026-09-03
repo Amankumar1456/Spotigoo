@@ -10,6 +10,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildFieldNotesTools } from "../js/webmcp-tools.js";
 import { addReport, advanceReportStatuses, getReportById, STATUS, STATUS_TRANSITION_MS } from "../js/reports.js";
+import { resetStateForTests } from "../js/state.js";
+
+// state.js holds drafts/actionStack as module-level singletons (by design —
+// see the header comment in state.js). Each test in this file describes
+// itself as running "on a clean session", so give it one: reset before every
+// test rather than relying on execution order/leftovers from prior tests.
+test.beforeEach(() => resetStateForTests());
 
 function getTool(tools, name) {
   const t = tools.find((x) => x.name === name);
@@ -80,6 +87,7 @@ test("critical hazards require two explicit confirmations and cannot be undone",
   const tools = buildFieldNotesTools();
   const describe = getTool(tools, "describe_issue_accessibly");
   const acknowledge = getTool(tools, "acknowledge_safety_guidance");
+  const readSummary = getTool(tools, "read_report_summary");
   const confirm = getTool(tools, "confirm_submission");
   const submit = getTool(tools, "submit_report");
   const undo = getTool(tools, "undo_last_action");
@@ -88,6 +96,7 @@ test("critical hazards require two explicit confirmations and cannot be undone",
   assert.equal(draft.risk_level, "critical");
   await assert.rejects(() => confirm.execute({ draft_id: draft.draft_id, confirm: true }), /safety-critical/i);
   await acknowledge.execute({ draft_id: draft.draft_id, acknowledge: true });
+  await readSummary.execute({ draft_id: draft.draft_id });
   await confirm.execute({ draft_id: draft.draft_id, confirm: true });
   await submit.execute({ draft_id: draft.draft_id });
   const undoResult = await undo.execute({});
@@ -135,9 +144,11 @@ test("confirm_submission requires confirm === true, not just truthy", async () =
   const tools = buildFieldNotesTools();
   const describe = getTool(tools, "describe_issue_accessibly");
   const confirm = getTool(tools, "confirm_submission");
+  const readSummary = getTool(tools, "read_report_summary");
 
   const draft = await describe.execute({ category: "graffiti", description: "Tagging on the underpass wall" });
 
+  await readSummary.execute({ draft_id: draft.draft_id });
   await assert.rejects(() => confirm.execute({ draft_id: draft.draft_id, confirm: "yes" }));
   await assert.rejects(() => confirm.execute({ draft_id: draft.draft_id, confirm: 1 }));
   const ok = await confirm.execute({ draft_id: draft.draft_id, confirm: true });
@@ -148,22 +159,44 @@ test("full happy path: describe -> confirm -> submit succeeds and is undoable", 
   const tools = buildFieldNotesTools();
   const describe = getTool(tools, "describe_issue_accessibly");
   const confirm = getTool(tools, "confirm_submission");
+  const readSummary = getTool(tools, "read_report_summary");
   const submit = getTool(tools, "submit_report");
   const undo = getTool(tools, "undo_last_action");
   const status = getTool(tools, "get_report_status");
 
   const draft = await describe.execute({ category: "trash", description: "Overflowing bin behind the deli" });
+  await readSummary.execute({ draft_id: draft.draft_id });
   await confirm.execute({ draft_id: draft.draft_id, confirm: true });
   const submitted = await submit.execute({ draft_id: draft.draft_id });
   assert.match(submitted.report_id, /^MR-/);
+  assert.equal(submitted.tracking_id, submitted.report_id);
+  assert.equal(submitted.authority, "Spotigo Demo Authority");
+  assert.equal(submitted.mode, "Simulated civic backend");
 
   const found = await status.execute({ report_id: submitted.report_id });
   assert.equal(found.status, "submitted");
+  assert.equal(found.tracking_id, submitted.report_id);
 
   const undone = await undo.execute({});
   assert.equal(undone.undone, true);
 
   await assert.rejects(() => status.execute({ report_id: submitted.report_id }), /No report found/);
+});
+
+test("submission requires review and explicit human confirmation", async () => {
+  const tools = buildFieldNotesTools();
+  const describe = getTool(tools, "describe_issue_accessibly");
+  const readSummary = getTool(tools, "read_report_summary");
+  const confirm = getTool(tools, "confirm_submission");
+  const submit = getTool(tools, "submit_report");
+  const draft = await describe.execute({ category: "pothole", description: "Deep pothole", location_text: "5th and Main" });
+  await assert.rejects(() => confirm.execute({ draft_id: draft.draft_id, confirm: true }), /has not been reviewed/i);
+  await assert.rejects(() => submit.execute({ draft_id: draft.draft_id }), /not been confirmed/i);
+  await readSummary.execute({ draft_id: draft.draft_id });
+  await assert.rejects(() => submit.execute({ draft_id: draft.draft_id }), /not been confirmed/i);
+  await confirm.execute({ draft_id: draft.draft_id, confirm: true });
+  const submitted = await submit.execute({ draft_id: draft.draft_id });
+  assert.match(submitted.tracking_id, /^MR-/);
 });
 
 test("check_duplicate_reports finds the seeded nearby pothole report", async () => {
