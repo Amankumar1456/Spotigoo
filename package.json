@@ -1,5 +1,5 @@
 {
-  "name": "field-notes",
+  "name": "spotigo",
   "version": "1.0.0",
   "description": "Voice- and photo-first civic issue reporting, built with WebMCP. A human confirmation gate stands between any agent and a real submission.",
   "scripts": {

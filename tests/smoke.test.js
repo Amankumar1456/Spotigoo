@@ -48,7 +48,7 @@ async function loadApp() {
 test("app boots without throwing when document.modelContext is absent", async () => {
   const { dom, restore } = await loadApp();
   const badge = dom.window.document.getElementById("webmcp-status");
-  assert.match(badge.textContent, /WebMCP not detected/);
+  assert.match(badge.textContent, /Spotigo Browser WebMCP is not available/);
   restore();
 });
 

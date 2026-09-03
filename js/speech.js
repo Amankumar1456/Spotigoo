@@ -1,5 +1,5 @@
 // js/speech.js
-// Thin wrapper around the Web Speech API. This is what makes Field Notes usable
+// Thin wrapper around the Web Speech API. This is what makes Spotigo usable
 // without reading or typing: descriptions can be spoken in, and every readback
 // (duplicate-check results, the confirmation summary) can be spoken out.
 //

@@ -1,5 +1,5 @@
 // js/app.js
-// Wires the app together. The key architectural point: the human-facing form
+// Wires the Spotigo browser app together. The key architectural point: the human-facing form
 // below does not have its own separate logic — every button calls the exact
 // same tool.execute() closures that document.modelContext exposes to an agent.
 // A person and their agent are operating on one shared, live session, which is
@@ -215,8 +215,8 @@ function init() {
 
   const badge = document.getElementById("webmcp-status");
   badge.textContent = registered
-    ? "✅ WebMCP tools registered — an agent in this tab can act now"
-    : "ℹ️ WebMCP not detected in this browser — try Chrome with chrome://flags/#enable-webmcp-testing enabled, or ChatGPT's in-app browser. Manual mode still works below.";
+    ? "✅ Spotigo Browser WebMCP tools registered — an agent in this tab can act now"
+    : "ℹ️ Spotigo Browser WebMCP is not available in this browser — try Chrome with chrome://flags/#enable-webmcp-testing enabled, or ChatGPT's in-app browser. Manual mode still works below.";
   badge.className = registered ? "badge badge--ok" : "badge badge--info";
 
   initHumanForm(tools);

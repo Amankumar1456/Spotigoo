@@ -1,5 +1,5 @@
 // js/webmcp-tools.js
-// Registers Field Notes' WebMCP tools on document.modelContext.
+// Registers Spotigo Browser WebMCP tools on document.modelContext.
 //
 // Design principles behind this tool set (relevant to WebMCP Leverage judging):
 //   - Tools are narrow and composable, not one mega "do_everything" tool.
@@ -31,6 +31,37 @@ import {
 import { getCapability } from "./capabilities.js";
 
 const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
+const DEMO_LOCATION = Object.freeze({
+  lat: 37.7749,
+  lng: -122.4194,
+  label: "Demo location: Market Street & 5th Street, San Francisco",
+});
+
+async function resolveCoordinates(input, locationText) {
+  if (Number.isFinite(input.lat) && Number.isFinite(input.lng)) {
+    return { lat: input.lat, lng: input.lng, locationText, source: "provided" };
+  }
+
+  if (typeof window !== "undefined" && typeof navigator !== "undefined" && navigator.geolocation) {
+    try {
+      const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 5_000,
+        maximumAge: 60_000,
+      }));
+      return {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        locationText: locationText || "Current browser location",
+        source: "browser_geolocation",
+      };
+    } catch {
+      // Permission is optional; fall through to the labelled fixed demo location.
+    }
+  }
+
+  return { lat: DEMO_LOCATION.lat, lng: DEMO_LOCATION.lng, locationText: locationText || DEMO_LOCATION.label, source: "demo_location" };
+}
 
 function draftSummaryText(draft) {
   const loc = draft.locationText ? draft.locationText : `coordinates ${draft.lat?.toFixed(4)}, ${draft.lng?.toFixed(4)}`;
@@ -83,14 +114,13 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         required: ["issue_type", "description"],
       },
       execute: async (input) => {
-        const lat = typeof input.lat === "number" ? input.lat : 37.7749 + (Math.random() - 0.5) * 0.01;
-        const lng = typeof input.lng === "number" ? input.lng : -122.4194 + (Math.random() - 0.5) * 0.01;
+        const coordinates = await resolveCoordinates(input, input.location);
         const draft = createDraft({
           category: input.issue_type,
           description: input.description,
-          lat,
-          lng,
-          locationText: input.location,
+          lat: coordinates.lat,
+          lng: coordinates.lng,
+          locationText: coordinates.locationText,
           photoNote: input.photo_filename ? { fileName: input.photo_filename, sizeBytes: input.photo_size_bytes } : null,
         });
         const output = {
@@ -99,6 +129,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           action_state: "READY_FOR_CONFIRMATION",
           authority_status: "UNKNOWN",
           external_submission: "NOT_ATTEMPTED",
+          location_source: coordinates.source,
           summary: `Spotigo draft created. ${draftSummaryText(draft)} No government authority has been contacted. Check duplicates, read the summary, and obtain explicit human confirmation before creating a Spotigo report.`,
         };
         notify("report_civic_issue", input, output);
@@ -134,14 +165,13 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         required: ["category", "description"],
       },
       execute: async (input) => {
-        const lat = typeof input.lat === "number" ? input.lat : 37.7749 + (Math.random() - 0.5) * 0.01;
-        const lng = typeof input.lng === "number" ? input.lng : -122.4194 + (Math.random() - 0.5) * 0.01;
+        const coordinates = await resolveCoordinates(input, input.location_text);
         const draft = createDraft({
           category: input.category,
           description: input.description,
-          lat,
-          lng,
-          locationText: input.location_text,
+          lat: coordinates.lat,
+          lng: coordinates.lng,
+          locationText: coordinates.locationText,
           photoNote: input.photo_filename ? { fileName: input.photo_filename, sizeBytes: input.photo_size_bytes } : null,
         });
         const output = {
@@ -152,6 +182,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           location_text: draft.locationText,
           lat: draft.lat,
           lng: draft.lng,
+          location_source: coordinates.source,
           risk_level: draft.risk.level,
           requires_safety_acknowledgement: draft.risk.level === "critical",
           summary: `Draft created. ${draftSummaryText(draft)} Next, call check_duplicate_reports to see if this has already been reported.`,
@@ -413,7 +444,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
 }
 
 /**
- * Registers all Field Notes tools on document.modelContext, if the browser
+ * Registers all Spotigo Browser WebMCP tools on document.modelContext, if the browser
  * supports WebMCP (Chrome with the WebMCP flag, or ChatGPT's in-app browser).
  * Falls back gracefully with a console note otherwise — the page still works
  * for direct human use and for the on-page Tool Tester.
@@ -423,7 +454,7 @@ export function registerFieldNotesTools({ onToolCall } = {}) {
 
   if (typeof document === "undefined" || !document.modelContext || !document.modelContext.registerTool) {
     console.info(
-      "[Field Notes] document.modelContext is not available — WebMCP tools were not registered with the browser. Enable chrome://flags/#enable-webmcp-testing, or open this app in ChatGPT's in-app browser. The Tool Tester panel still works for manual testing."
+      "[Spotigo] document.modelContext is not available — Browser WebMCP tools were not registered. Enable chrome://flags/#enable-webmcp-testing, or open this app in ChatGPT's in-app browser. The Tool Tester panel still works for manual testing."
     );
     return { registered: false, tools };
   }

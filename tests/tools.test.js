@@ -53,6 +53,16 @@ test("report_civic_issue is intent-level, creates only a local draft, and keeps 
   assert.equal(out.external_submission, "NOT_ATTEMPTED");
 });
 
+test("missing coordinates use a labelled fixed demo location instead of random coordinates", async () => {
+  const tools = buildFieldNotesTools();
+  const out = await getTool(tools, "report_civic_issue").execute({
+    issue_type: "pothole",
+    description: "Pothole near the crossing",
+  });
+  assert.equal(out.location_source, "demo_location");
+  assert.match(out.summary, /Demo location: Market Street & 5th Street, San Francisco/);
+});
+
 test("photo metadata is retained in the readable draft summary without claiming image analysis", async () => {
   const tools = buildFieldNotesTools();
   const draft = await getTool(tools, "describe_issue_accessibly").execute({
