@@ -45,6 +45,13 @@
       <label for="location">Location (optional description)</label>
       <input id="location" type="text" placeholder="e.g. corner of 5th and Main" />
 
+      <label for="photo">Add a photo (optional)</label>
+      <div class="photo-capture">
+        <input id="photo" type="file" accept="image/*" capture="environment" aria-describedby="photo-help" />
+        <p id="photo-help" class="muted">Use your camera or choose an image. Field Notes stores the file name and size with this draft; it does not analyse the image.</p>
+        <div id="photo-preview" class="photo-preview" hidden aria-live="polite"></div>
+      </div>
+
       <button type="submit" class="btn btn--primary">Create draft</button>
     </form>
 
@@ -54,9 +61,13 @@
     </div>
 
     <div class="confirm-row">
+      <label id="safety-acknowledgement" class="safety-acknowledgement" hidden>
+        <input type="checkbox" id="safety-checkbox" disabled />
+        4a. I understand this may be an immediate danger. I will keep clear and contact emergency services if anyone is at risk.
+      </label>
       <label>
         <input type="checkbox" id="confirm-checkbox" disabled />
-        4. I've reviewed the summary — this is accurate, submit it
+        <span id="confirm-label">4. I've reviewed the summary — this is accurate, submit it</span>
       </label>
     </div>
 

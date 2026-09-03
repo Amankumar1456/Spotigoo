@@ -17,11 +17,13 @@ import {
   findNearbyReports,
   getReportById,
   listAllReports,
+  STATUS_TRANSITION_MS,
 } from "./reports.js";
 import {
   createDraft,
   getDraft,
   confirmDraft,
+  acknowledgeSafetyGuidance,
   submitDraft,
   undoLastAction,
   peekLastAction,
@@ -31,8 +33,14 @@ const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
 
 function draftSummaryText(draft) {
   const loc = draft.locationText ? draft.locationText : `coordinates ${draft.lat?.toFixed(4)}, ${draft.lng?.toFixed(4)}`;
-  const photo = draft.photoNote ? ` A photo was attached: ${draft.photoNote}.` : "";
-  return `${categoryLabel(draft.category)} at ${loc}. Description: "${draft.description}".${photo} This report has ${draft.confirmed ? "been confirmed and is ready to submit" : "NOT yet been confirmed"}.`;
+  const photo = draft.photoFileName ? ` Photo attached: ${draft.photoFileName} (${formatFileSize(draft.photoSizeBytes)}).` : "";
+  const safety = draft.risk.level === "critical" ? ` SAFETY-CRITICAL: ${draft.risk.safetyMessage} Safety acknowledgement is ${draft.safetyAcknowledged ? "recorded" : "still required"}.` : "";
+  return `${categoryLabel(draft.category)} at ${loc}. Description: "${draft.description}".${photo}${safety} This report has ${draft.confirmed ? "been confirmed and is ready to submit" : "NOT yet been confirmed"}.`;
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes)) return "size unavailable";
+  return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function requireDraft(draftId) {
@@ -59,7 +67,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
     {
       name: "describe_issue_accessibly",
       description:
-        "Create a structured civic issue report draft from a plain-language description. Use this when the user describes a problem they see (pothole, broken streetlight, obstructed sidewalk, etc.) by voice, text, or photo description. Does not submit anything — it only builds a draft for review.",
+        "Create a structured civic issue report draft from a plain-language description. Attach optional photo file metadata when the person selected a photo. Does not submit anything — it only builds a draft for review.",
       inputSchema: {
         type: "object",
         properties: {
@@ -78,10 +86,8 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           },
           lat: { type: "number", description: "Latitude, if known (e.g. from device GPS)." },
           lng: { type: "number", description: "Longitude, if known (e.g. from device GPS)." },
-          photo_note: {
-            type: "string",
-            description: "Optional description of an attached photo, e.g. 'photo shows a foot-wide pothole in the right lane'.",
-          },
+          photo_filename: { type: "string", description: "Name of an optional photo selected by the human." },
+          photo_size_bytes: { type: "number", description: "Byte size of the optional photo selected by the human." },
         },
         required: ["category", "description"],
       },
@@ -94,7 +100,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           lat,
           lng,
           locationText: input.location_text,
-          photoNote: input.photo_note,
+          photoNote: input.photo_filename ? { fileName: input.photo_filename, sizeBytes: input.photo_size_bytes } : null,
         });
         const output = {
           draft_id: draft.id,
@@ -104,9 +110,33 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           location_text: draft.locationText,
           lat: draft.lat,
           lng: draft.lng,
+          risk_level: draft.risk.level,
+          requires_safety_acknowledgement: draft.risk.level === "critical",
           summary: `Draft created. ${draftSummaryText(draft)} Next, call check_duplicate_reports to see if this has already been reported.`,
         };
         notify("describe_issue_accessibly", input, output);
+        return output;
+      },
+    },
+
+    {
+      name: "acknowledge_safety_guidance",
+      description:
+        "Record that the human has heard the urgent safety guidance for a safety-critical draft. Only applies to drafts classified as critical. The human must still explicitly confirm submission afterward.",
+      inputSchema: {
+        type: "object",
+        properties: { draft_id: { type: "string" }, acknowledge: { type: "boolean", description: "Must be explicitly true." } },
+        required: ["draft_id", "acknowledge"],
+      },
+      execute: async (input) => {
+        if (input.acknowledge !== true) throw new Error("acknowledge must be explicitly true.");
+        const draft = acknowledgeSafetyGuidance(input.draft_id);
+        const output = {
+          draft_id: draft.id,
+          safety_acknowledged: true,
+          summary: "Safety guidance acknowledged. Review the report again, then provide the separate final confirmation before submitting.",
+        };
+        notify("acknowledge_safety_guidance", input, output);
         return output;
       },
     },
@@ -181,6 +211,8 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           draft_id: draft.id,
           confirmed: draft.confirmed,
           submitted: draft.submitted,
+          risk_level: draft.risk.level,
+          requires_safety_acknowledgement: draft.risk.level === "critical",
           summary: draftSummaryText(draft),
         };
         notify("read_report_summary", input, output);
@@ -208,7 +240,9 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         const output = {
           draft_id: draft.id,
           confirmed: true,
-          summary: "Confirmed. You can now call submit_report to file this issue with the city.",
+          summary: draft.risk.level === "critical"
+            ? "Final confirmation recorded. This safety-critical report can now be filed and cannot be undone."
+            : "Confirmed. You can now call submit_report to file this issue with the city.",
         };
         notify("confirm_submission", input, output);
         return output;
@@ -227,13 +261,16 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
         required: ["draft_id"],
       },
       execute: async (input) => {
+        const draft = requireDraft(input.draft_id);
         const record = submitDraft(input.draft_id);
         const output = {
           report_id: record.id,
           category_label: categoryLabel(record.category),
           status: record.status,
           reported_at: record.reportedAt,
-          summary: `Filed as report ${record.id}. The city has been notified. You can undo this within the session via undo_last_action if it was a mistake.`,
+          summary: draft.risk.level === "critical"
+            ? `Filed as safety-critical report ${record.id}. The city has been notified. This report cannot be undone.`
+            : `Filed as report ${record.id}. The city has been notified. You can undo this within the session via undo_last_action if it was a mistake.`,
         };
         notify("submit_report", input, output);
         return output;
@@ -253,6 +290,11 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           return output;
         }
         const action = undoLastAction();
+        if (action.blocked) {
+          const output = { undone: false, safety_critical: true, summary: "This safety-critical report cannot be undone." };
+          notify("undo_last_action", input, output);
+          return output;
+        }
         const output = {
           undone: true,
           action_type: action.type,
@@ -317,7 +359,7 @@ export function buildFieldNotesTools({ onToolCall } = {}) {
           category_label: categoryLabel(record.category),
           status: record.status,
           reported_at: record.reportedAt,
-          summary: `Report ${record.id} is currently "${record.status}".`,
+        summary: `Report ${record.id} is currently "${record.status}". Newly filed mock reports advance every ${STATUS_TRANSITION_MS / 1000} seconds when checked.`,
         };
         notify("get_report_status", input, output);
         return output;

@@ -35,7 +35,8 @@ export function renderDraftReview(el, draft) {
       <p><strong>${categoryLabel(draft.category)}</strong></p>
       <p>${escapeHtml(draft.description)}</p>
       <p class="muted">${draft.locationText ? escapeHtml(draft.locationText) : `${draft.lat?.toFixed(4)}, ${draft.lng?.toFixed(4)}`}</p>
-      ${draft.photoNote ? `<p class="muted">📷 ${escapeHtml(draft.photoNote)}</p>` : ""}
+      ${draft.photoFileName ? `<p class="draft-photo-meta">Photo attached · ${escapeHtml(draft.photoFileName)} · ${formatFileSize(draft.photoSizeBytes)}</p>` : ""}
+      ${draft.risk.level === "critical" ? `<div class="risk-alert" role="alert"><strong>Safety-critical report</strong><p>${escapeHtml(draft.risk.safetyMessage)}</p><p>${draft.safetyAcknowledged ? "Safety guidance acknowledged. Final confirmation is still required." : "Safety acknowledgement and final confirmation are both required."}</p></div>` : ""}
       <p class="draft-status ${draft.confirmed ? "draft-status--confirmed" : "draft-status--pending"}">
         ${draft.submitted ? "✅ Submitted" : draft.confirmed ? "☑️ Confirmed — ready to submit" : "⏳ Awaiting your confirmation"}
       </p>
@@ -80,4 +81,9 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes)) return "size unavailable";
+  return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

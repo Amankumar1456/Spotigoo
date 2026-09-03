@@ -25,14 +25,15 @@ WebMCP tools run **inside the user's already-open, already-authenticated tab**. 
 
 | Tool | Purpose | Notes |
 |---|---|---|
-| `describe_issue_accessibly` | Turns a spoken/typed description + category into a structured draft | Does not submit anything |
+| `describe_issue_accessibly` | Turns a spoken/typed description + category into a structured draft | Accepts optional, human-selected photo file metadata; does not analyse the image |
+| `acknowledge_safety_guidance` | Records the first explicit acknowledgement for a safety-critical draft | Required for critical hazards before the separate final confirmation |
 | `check_duplicate_reports` | Finds existing reports near the draft's location/category in the last 30 days | Avoids duplicate city tickets |
 | `read_report_summary` | Plain-language readback of the draft exactly as it will be filed | Should be called (and heard) before confirming |
-| `confirm_submission` | Records explicit human confirmation (`confirm` must be **boolean** `true`, not merely truthy) | Required before `submit_report` will run |
-| `submit_report` | Files the draft | **Throws** if the draft isn't confirmed — this is the hard gate |
-| `undo_last_action` | Reverses the most recent mutating action via a real recorded inverse, not model guesswork | Works on submissions within the session |
+| `confirm_submission` | Records explicit human confirmation (`confirm` must be **boolean** `true`, not merely truthy) | Critical hazards also require `acknowledge_safety_guidance` first |
+| `submit_report` | Files the draft | **Throws** if its required confirmation(s) are missing; safety-critical reports cannot be undone |
+| `undo_last_action` | Reverses the most recent mutating action via a real recorded inverse, not model guesswork | Works on routine submissions within the session |
 | `list_nearby_reports` | Browse existing reports near a location | Independent of filing a new one |
-| `get_report_status` | Look up a filed report's status by id | |
+| `get_report_status` | Look up a filed report's status by id | Newly filed mock reports advance through the lifecycle every 12 seconds |
 
 ## Architecture
 
@@ -71,7 +72,9 @@ No `npm install` is required to *run* the app — only `jsdom` is a devDependenc
 ## Honest limitations
 
 - The city backend is mocked in-memory and resets on page reload — there is no real persistence or real municipal integration. That's a deliberate hackathon-scope decision, not an oversight; the tool layer is written so only `js/reports.js` would need replacing to point at a real API.
-- Photo input is represented as a text `photo_note` field (a description of what a photo shows), not actual image upload/analysis — full multimodal photo handling was out of scope for the build window.
+- The photo picker uses a real device-camera/file input and previews the selected image. The static mock stores only its file name and byte size with the draft; it does not upload or analyse the image.
+- Risk classification is a small, explicit keyword set for a hackathon mock, not an emergency dispatch system. The critical path tells people to contact emergency services if anyone is at risk.
+- Status progression is a visible in-memory simulation; it advances only while this page is open and is not a municipal SLA.
 - Duplicate detection is a simple radius + recency filter, not semantic matching — two different-sounding descriptions of the same pothole at the same spot will still surface as a likely duplicate by distance, but two reports of the same issue described very differently at slightly different coordinates might not.
 - `undo_last_action` only reverses actions taken within the current browser session/tab; it does not call a real "retract my 311 ticket" city API, because most cities don't expose one.
 

@@ -9,6 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildFieldNotesTools } from "../js/webmcp-tools.js";
+import { addReport, advanceReportStatuses, getReportById, STATUS, STATUS_TRANSITION_MS } from "../js/reports.js";
 
 function getTool(tools, name) {
   const t = tools.find((x) => x.name === name);
@@ -16,10 +17,11 @@ function getTool(tools, name) {
   return t;
 }
 
-test("all seven core tools are defined with name, description, inputSchema, execute", () => {
+test("all nine tools are defined with name, description, inputSchema, execute", () => {
   const tools = buildFieldNotesTools();
   const expected = [
     "describe_issue_accessibly",
+    "acknowledge_safety_guidance",
     "check_duplicate_reports",
     "read_report_summary",
     "confirm_submission",
@@ -36,6 +38,44 @@ test("all seven core tools are defined with name, description, inputSchema, exec
     assert.equal(typeof t.execute, "function");
     assert.equal(t.inputSchema.type, "object");
   }
+});
+
+test("photo metadata is retained in the readable draft summary without claiming image analysis", async () => {
+  const tools = buildFieldNotesTools();
+  const draft = await getTool(tools, "describe_issue_accessibly").execute({
+    category: "pothole",
+    description: "Pothole beside the crossing",
+    photo_filename: "street-damage.jpg",
+    photo_size_bytes: 245000,
+  });
+  const summary = await getTool(tools, "read_report_summary").execute({ draft_id: draft.draft_id });
+  assert.match(summary.summary, /street-damage\.jpg/);
+  assert.match(summary.summary, /239 KB/);
+});
+
+test("critical hazards require two explicit confirmations and cannot be undone", async () => {
+  const tools = buildFieldNotesTools();
+  const describe = getTool(tools, "describe_issue_accessibly");
+  const acknowledge = getTool(tools, "acknowledge_safety_guidance");
+  const confirm = getTool(tools, "confirm_submission");
+  const submit = getTool(tools, "submit_report");
+  const undo = getTool(tools, "undo_last_action");
+
+  const draft = await describe.execute({ category: "other", description: "A downed power line is sparking near the playground" });
+  assert.equal(draft.risk_level, "critical");
+  await assert.rejects(() => confirm.execute({ draft_id: draft.draft_id, confirm: true }), /safety-critical/i);
+  await acknowledge.execute({ draft_id: draft.draft_id, acknowledge: true });
+  await confirm.execute({ draft_id: draft.draft_id, confirm: true });
+  await submit.execute({ draft_id: draft.draft_id });
+  const undoResult = await undo.execute({});
+  assert.equal(undoResult.undone, false);
+  assert.equal(undoResult.safety_critical, true);
+});
+
+test("new reports progress through the mock city lifecycle when status is checked", () => {
+  const record = addReport({ category: "streetlight", description: "Light out", lat: 1, lng: 1 });
+  advanceReportStatuses(Date.now() + STATUS_TRANSITION_MS);
+  assert.equal(getReportById(record.id).status, STATUS.ACKNOWLEDGED);
 });
 
 test("describe_issue_accessibly creates a draft with a plain-language summary", async () => {

@@ -38,7 +38,10 @@ export function createDraft({ category, description, lat, lng, locationText, pho
     lat,
     lng,
     locationText: locationText || null,
-    photoNote: photoNote || null,
+    photoFileName: photoNote?.fileName || null,
+    photoSizeBytes: Number.isFinite(photoNote?.sizeBytes) ? photoNote.sizeBytes : null,
+    risk: classifyRisk(description),
+    safetyAcknowledged: false,
     confirmed: false,
     submitted: false,
     reportId: null,
@@ -61,8 +64,21 @@ export function confirmDraft(draftId) {
   const draft = state.drafts.get(draftId);
   if (!draft) throw new Error(`No draft found with id ${draftId}`);
   if (draft.submitted) throw new Error(`Draft ${draftId} was already submitted and cannot be re-confirmed`);
+  if (draft.risk.level === "critical" && !draft.safetyAcknowledged) {
+    throw new Error(`Draft ${draftId} is safety-critical. Acknowledge the safety guidance before confirming.`);
+  }
   draft.confirmed = true;
   emit({ type: "draft_confirmed", draft });
+  return draft;
+}
+
+export function acknowledgeSafetyGuidance(draftId) {
+  const draft = state.drafts.get(draftId);
+  if (!draft) throw new Error(`No draft found with id ${draftId}`);
+  if (draft.risk.level !== "critical") throw new Error(`Draft ${draftId} does not require safety acknowledgement.`);
+  if (draft.submitted) throw new Error(`Draft ${draftId} was already submitted.`);
+  draft.safetyAcknowledged = true;
+  emit({ type: "safety_acknowledged", draft });
   return draft;
 }
 
@@ -88,6 +104,7 @@ export function submitDraft(draftId) {
     type: "submit_report",
     label: `Submitted report ${record.id} (${draft.category})`,
     payload: { draftId, reportId: record.id },
+    undoable: draft.risk.level !== "critical",
     inverse: () => {
       removeReport(record.id);
       draft.submitted = false;
@@ -110,11 +127,36 @@ export function peekLastAction() {
 }
 
 export function undoLastAction() {
-  const action = state.actionStack.pop();
+  const action = state.actionStack[state.actionStack.length - 1];
   if (!action) return null;
+  if (action.undoable === false) return { blocked: true, action };
+  state.actionStack.pop();
   action.inverse();
   emit({ type: "action_undone", action });
   return action;
+}
+
+const CRITICAL_HAZARDS = [
+  "downed power line",
+  "downed powerline",
+  "gas smell",
+  "gas leak",
+  "exposed wiring",
+  "exposed wire",
+  "live wire",
+  "sparking wire",
+];
+
+export function classifyRisk(description = "") {
+  const normalized = description.toLowerCase();
+  const matchedPhrases = CRITICAL_HAZARDS.filter((phrase) => normalized.includes(phrase));
+  return matchedPhrases.length
+    ? {
+        level: "critical",
+        matchedPhrases,
+        safetyMessage: "This may be an immediate danger. Keep clear and contact emergency services if anyone is at risk. This report cannot be retracted after submission.",
+      }
+    : { level: "routine", matchedPhrases: [], safetyMessage: null };
 }
 
 export function actionHistory() {

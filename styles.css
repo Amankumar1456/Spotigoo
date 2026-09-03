@@ -102,6 +102,7 @@ select, textarea, input[type="text"] {
   background: var(--paper);
   color: var(--ink);
 }
+input[type="file"] { width: 100%; font: inherit; padding: 10px; border: 1.5px dashed var(--line); border-radius: 10px; background: var(--paper); }
 select:focus, textarea:focus, input:focus { outline: var(--focus); outline-offset: 1px; }
 
 .input-row { display: flex; gap: 8px; align-items: flex-start; }
@@ -137,6 +138,13 @@ select:focus, textarea:focus, input:focus { outline: var(--focus); outline-offse
 }
 .confirm-row label { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 700; }
 .confirm-row input[type="checkbox"] { width: 20px; height: 20px; }
+.safety-acknowledgement { margin: 0 0 12px !important; padding-bottom: 12px; border-bottom: 1px solid #f0d8a8; color: #7a2100; }
+
+.photo-preview { display: flex; gap: 12px; align-items: center; margin-top: 10px; padding: 10px; background: #f4f7f5; border-radius: 10px; }
+.photo-preview img { width: 78px; height: 58px; object-fit: cover; border-radius: 7px; border: 1px solid var(--line); }
+.photo-preview p, .draft-photo-meta { margin: 0; color: var(--ink-soft); font-family: system-ui, sans-serif; font-size: 0.88rem; }
+.risk-alert { margin: 14px 0; padding: 12px 14px; background: var(--error-tint); border-left: 4px solid var(--error); border-radius: 8px; font-family: system-ui, sans-serif; }
+.risk-alert p { margin: 5px 0 0; font-size: 0.92rem; }
 
 .status { min-height: 1.4em; margin-top: 14px; font-family: system-ui, sans-serif; font-size: 0.94rem; }
 .status--ok { color: var(--brand-dark); }

@@ -23,6 +23,9 @@ export const STATUS = {
   RESOLVED: "resolved",
 };
 
+export const STATUS_TRANSITION_MS = 12000;
+const STATUS_FLOW = [STATUS.SUBMITTED, STATUS.ACKNOWLEDGED, STATUS.IN_PROGRESS, STATUS.RESOLVED];
+
 // Seeded "existing" reports already on the books, used to demonstrate duplicate
 // detection. Coordinates are loosely arranged around a fictional downtown grid.
 let nextId = 1042;
@@ -93,14 +96,17 @@ export function distanceMeters(a, b) {
 }
 
 export function listAllReports() {
+  advanceReportStatuses();
   return reports.slice().sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
 }
 
 export function getReportById(id) {
+  advanceReportStatuses();
   return reports.find((r) => r.id === id) || null;
 }
 
 export function findNearbyReports({ lat, lng, category, radiusMeters = 250, sinceDays = 30 }) {
+  advanceReportStatuses();
   const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
   return reports
     .filter((r) => (category ? r.category === category : true))
@@ -122,10 +128,26 @@ export function addReport(draft) {
     locationText: draft.locationText || null,
     status: STATUS.SUBMITTED,
     reportedAt: new Date().toISOString(),
+    statusUpdatedAt: new Date().toISOString(),
     source: "agent-assisted",
   };
   reports.unshift(record);
   return record;
+}
+
+/** Advances new mock reports through a visible lifecycle every 12 seconds. */
+export function advanceReportStatuses(now = Date.now()) {
+  for (const report of reports) {
+    if (!report.statusUpdatedAt || report.status === STATUS.RESOLVED) continue;
+    const elapsedSteps = Math.floor((now - new Date(report.statusUpdatedAt).getTime()) / STATUS_TRANSITION_MS);
+    if (elapsedSteps < 1) continue;
+    const currentIndex = STATUS_FLOW.indexOf(report.status);
+    const nextIndex = Math.min(currentIndex + elapsedSteps, STATUS_FLOW.length - 1);
+    if (nextIndex !== currentIndex) {
+      report.status = STATUS_FLOW[nextIndex];
+      report.statusUpdatedAt = new Date(now).toISOString();
+    }
+  }
 }
 
 /** Removes a report by id (used by undo). Returns true if removed. */

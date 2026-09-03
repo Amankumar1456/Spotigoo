@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +27,13 @@ async function loadApp() {
   // jsdom doesn't implement scrollIntoView / matchMedia; stub the ones our code path might touch.
   dom.window.matchMedia = dom.window.matchMedia || (() => ({ matches: false, addListener() {}, removeListener() {} }));
 
-  const appModule = await import(path.join(root, "js/app.js") + `?t=${Date.now()}`);
+  // pathToFileURL is required here, not just path.join — on Windows a raw path
+  // like "D:\foo\js\app.js" is not a valid input to import(); it must be a
+  // proper file:// URL (file:///D:/foo/js/app.js). path.join() alone works on
+  // macOS/Linux but throws ERR_UNSUPPORTED_ESM_URL_SCHEME on Windows.
+  const appUrl = pathToFileURL(path.join(root, "js/app.js"));
+  appUrl.search = `?t=${Date.now()}`;
+  const appModule = await import(appUrl.href);
   // app.js self-inits on DOMContentLoaded when document is loading, but since
   // jsdom's initial HTML is already parsed by the time we import, call init()
   // directly against this dom's document/window.
@@ -88,6 +94,6 @@ test("tool tester panel renders all registered tools as options", async () => {
   const options = [...doc.querySelectorAll("#tool-select option")].map((o) => o.value);
   assert.ok(options.includes("submit_report"));
   assert.ok(options.includes("describe_issue_accessibly"));
-  assert.ok(options.length === 8);
+  assert.ok(options.length === 9);
   restore();
 });

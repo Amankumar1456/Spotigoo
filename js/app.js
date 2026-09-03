@@ -57,14 +57,38 @@ function initHumanForm(tools) {
   const categorySelect = document.getElementById("category");
   const descriptionInput = document.getElementById("description");
   const locationInput = document.getElementById("location");
+  const photoInput = document.getElementById("photo");
+  const photoPreview = document.getElementById("photo-preview");
   const voiceBtn = document.getElementById("voice-btn");
   const checkDupeBtn = document.getElementById("check-dupe-btn");
   const readSummaryBtn = document.getElementById("read-summary-btn");
   const confirmCheckbox = document.getElementById("confirm-checkbox");
+  const safetyCheckbox = document.getElementById("safety-checkbox");
+  const safetyAcknowledgement = document.getElementById("safety-acknowledgement");
+  const confirmLabel = document.getElementById("confirm-label");
   const submitBtn = document.getElementById("submit-btn");
   const undoBtn = document.getElementById("undo-btn");
 
   voiceBtn.hidden = !isVoiceInputSupported();
+  let previewUrl = null;
+
+  photoInput.addEventListener("change", () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const [file] = photoInput.files;
+    if (!file) {
+      photoPreview.hidden = true;
+      photoPreview.replaceChildren();
+      return;
+    }
+    previewUrl = URL.createObjectURL(file);
+    const image = document.createElement("img");
+    image.src = previewUrl;
+    image.alt = `Selected photo preview: ${file.name}`;
+    const meta = document.createElement("p");
+    meta.textContent = `${file.name} · ${formatFileSize(file.size)}`;
+    photoPreview.replaceChildren(image, meta);
+    photoPreview.hidden = false;
+  });
   voiceBtn.addEventListener("click", async () => {
     try {
       setStatusMessage("Listening…");
@@ -84,12 +108,20 @@ function initHumanForm(tools) {
         category: categorySelect.value,
         description: descriptionInput.value,
         location_text: locationInput.value || undefined,
+        photo_filename: photoInput.files[0]?.name,
+        photo_size_bytes: photoInput.files[0]?.size,
       });
       currentDraftId = output.draft_id;
       refreshDraftPanel();
       setStatusMessage("Draft created. Now check for duplicates, then review before confirming.");
       confirmCheckbox.checked = false;
       confirmCheckbox.disabled = true;
+      safetyCheckbox.checked = false;
+      safetyCheckbox.disabled = true;
+      safetyAcknowledgement.hidden = output.risk_level !== "critical";
+      confirmLabel.textContent = output.risk_level === "critical"
+        ? "4b. I have reviewed the summary — file this safety-critical report permanently"
+        : "4. I've reviewed the summary — this is accurate, submit it";
     } catch (err) {
       setStatusMessage(err.message, true);
     }
@@ -112,7 +144,12 @@ function initHumanForm(tools) {
       const tool = findTool(tools, "read_report_summary");
       const output = await tool.execute({ draft_id: currentDraftId });
       setStatusMessage(output.summary);
-      confirmCheckbox.disabled = false;
+      if (output.risk_level === "critical") {
+        safetyCheckbox.disabled = false;
+        confirmCheckbox.disabled = true;
+      } else {
+        confirmCheckbox.disabled = false;
+      }
       if (isVoiceOutputSupported()) speak(output.summary);
     } catch (err) {
       setStatusMessage(err.message, true);
@@ -130,6 +167,20 @@ function initHumanForm(tools) {
     } catch (err) {
       setStatusMessage(err.message, true);
       confirmCheckbox.checked = false;
+    }
+  });
+
+  safetyCheckbox.addEventListener("change", async () => {
+    if (!currentDraftId || !safetyCheckbox.checked) return;
+    try {
+      const tool = findTool(tools, "acknowledge_safety_guidance");
+      const output = await tool.execute({ draft_id: currentDraftId, acknowledge: true });
+      setStatusMessage(output.summary);
+      confirmCheckbox.disabled = false;
+      refreshDraftPanel();
+    } catch (err) {
+      setStatusMessage(err.message, true);
+      safetyCheckbox.checked = false;
     }
   });
 
@@ -178,6 +229,11 @@ function init() {
     refreshReportsList();
     refreshDraftPanel();
   });
+
+  // Keeps the mock city lifecycle visible without polling an external service.
+  // The interval is intentionally browser-only: jsdom uses timers that keep
+  // Node's test runner alive after the smoke test has finished.
+  if (!/jsdom/i.test(window.navigator.userAgent)) window.setInterval(refreshReportsList, 1000);
 }
 
 if (typeof document !== "undefined") {
@@ -189,3 +245,7 @@ if (typeof document !== "undefined") {
 }
 
 export { init };
+
+function formatFileSize(bytes) {
+  return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
