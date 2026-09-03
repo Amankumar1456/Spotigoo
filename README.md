@@ -1,6 +1,6 @@
 # Spotigo
 
-Spotigo is an accessible civic-reporting demonstration for the WebMCP Hackathon. Its thesis is simple: **I did not tell the agent how to use this website.** A compatible agent can infer that Spotigo is relevant to “I want to report a pothole,” invoke a narrow civic-reporting tool, and still cannot submit without explicit human confirmation.
+Spotigo is an accessible civic-reporting demonstration for the WebMCP Hackathon. Its thesis is simple: **I did not tell the agent how to use this website.** A compatible agent can infer that Spotigo is relevant to “I want to report a pothole,” invoke a narrow civic-reporting tool, and still cannot submit without explicit human confirmation. Spotigo is the browser experience; Spotigo exposes civic-reporting intent to compatible MCP clients. A report is created only after explicit confirmation, and it is always a **Spotigo-local report**, not a government complaint.
 
 ## Deployed demo: Browser WebMCP only
 
@@ -103,7 +103,7 @@ Do not claim that the optional server MCP endpoint is live on Netlify unless one
 
 ## Browser tools and limitations
 
-The Spotigo page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is intentionally distinct from the persistent remote Spotigo API. Neither path contacts a government service.
+The Spotigo page has ten in-tab WebMCP tools backed by the in-memory demonstration city store in `js/reports.js`. It is intentionally distinct from the persistent remote Spotigo API, and neither path contacts a government service.
 
 Implemented: authentication, ownership, validation, request limits, state protection, idempotent local execution, capability discovery, and honest authority status.
 
