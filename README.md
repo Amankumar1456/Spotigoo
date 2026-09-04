@@ -1,3 +1,4 @@
+<img width="2048" height="1152" alt="spotigo_youtube_banner_2048x1152" src="https://github.com/user-attachments/assets/36b230a1-3978-4f0c-b013-8ad3610be994" />
 # Spotigo
 
 Spotigo is an accessible civic-reporting demonstration for the WebMCP Hackathon. Its thesis is simple: **I did not tell the agent how to use this website.** A compatible agent can infer that Spotigo is relevant to “I want to report a pothole,” invoke a narrow civic-reporting tool, and still cannot submit without explicit human confirmation. Spotigo is the browser experience; Spotigo exposes civic-reporting intent to compatible MCP clients. A report is created only after explicit confirmation, and it is always a **Spotigo-local report**, not a government complaint.
