@@ -120,6 +120,8 @@ The Spotigo page has ten in-tab WebMCP tools backed by the in-memory demonstrati
 Implemented: authentication, ownership, validation, request limits, state protection, idempotent local execution, capability discovery, and honest authority status.
 
 Architecturally prepared: verified authority resolution and an adapter boundary.
+<img width="1024" height="1536" alt="ChatGPT Image Sep 4, 2026, 06_24_27 AM" src="https://github.com/user-attachments/assets/9a112715-b462-4fa9-93c2-3fc0c3fe9a44" />
+
 
 Not implemented: OAuth/accounts, token rotation/revocation, distributed rate limiting, encryption at rest, file uploads, government submission, government verification, or horizontally scaled persistence.
 
